@@ -1,16 +1,21 @@
 package nassist.api.examples.livenotifications;
 
+import java.net.CookieHandler;
+import java.net.CookieManager;
+import java.net.HttpCookie;
 import java.util.Scanner;
 
 import microsoft.aspnet.signalr.client.ConnectionState;
 import microsoft.aspnet.signalr.client.LogLevel;
 import microsoft.aspnet.signalr.client.Logger;
-import microsoft.aspnet.signalr.client.SignalRFuture;
 import microsoft.aspnet.signalr.client.StateChangedCallback;
+import microsoft.aspnet.signalr.client.http.CookieCredentials;
 import microsoft.aspnet.signalr.client.hubs.HubConnection;
 import microsoft.aspnet.signalr.client.hubs.HubProxy;
 import microsoft.aspnet.signalr.client.hubs.SubscriptionHandler3;
 import microsoft.aspnet.signalr.client.hubs.SubscriptionHandler4;
+import nassist.api.examples.livenotifications.notificationmodel.dto.Authenticate;
+import net.servicestack.client.JsonServiceClient;
 
 public class Program {
 
@@ -18,23 +23,34 @@ public class Program {
 	private static HubProxy installationHub = null;
 	private static HubProxy sensorHub = null;
 
-	private static final int JOIN_RETRIES = 3;
-
 	private static final String NOTIFICATIONS_URL = "http://dev.nassist-test.com";
-	private static final String INSTALLATIONS_CHANNEL_NAME = "signalinstallations-";
-	private static final String SENSORS_CHANNEL_NAME = "signalsensors-";
+
 	private static final String INSTALLATION_SECURITY_EVENT = "receiveNewInstallationSecurityStatus";
 	private static final String SENSOR_NEW_VALUE_EVENT = "receiveNewSensorData";
 
 	private static final String INSTALLATION_ID = "00000000-0000-0000-0000-b827eb9e544b";
-	private static final String SENSOR_ID = "2e74636a-3dad-44ad-82a8-c42a2a8eb925";
+	private static final String SENSOR_ID = "8a18178c-5b9a-4e1f-9720-b08ab97b1990";
+	
+	private static final String UserName = "demo";
+	private static final String Password = "demo";
 
+	private static final JsonServiceClient client = new JsonServiceClient(NOTIFICATIONS_URL + "/api");
+	
 	public static void main(String[] args){
 		System.out.println("Press any key to start and a second time to exit the program");
 		
 		Scanner sc = new Scanner(System.in);
 		
 		sc.nextLine();
+		
+		// Obtain credentials
+		CookieManager cmanager = new CookieManager();
+		CookieHandler.setDefault(cmanager);
+		
+		Authenticate auth = new Authenticate();
+		auth.setUserName(UserName);
+		auth.setPassword(Password);
+		client.post(auth);
 		
 		Logger logger = new Logger() {
 			@Override
@@ -43,19 +59,31 @@ public class Program {
 			}
 		};
 
+		// Create connection with notification server
 		con = new HubConnection(NOTIFICATIONS_URL, "", true, logger);
 
+		CookieCredentials credentials = new CookieCredentials();
+
+		for(HttpCookie cookie: cmanager.getCookieStore().getCookies()){
+			credentials.addCookie(cookie.getName(), cookie.getValue());
+		}
+		
+		con.setCredentials(credentials);
+		
 		con.stateChanged(new StateChangedCallback() {
 			@Override
 			public void stateChanged(ConnectionState connectionStateOld, ConnectionState connectionStateNew) {
 				switch(connectionStateNew){
 				case Connected:
-					JoinGroup(installationHub, INSTALLATIONS_CHANNEL_NAME + INSTALLATION_ID, JOIN_RETRIES);
-					JoinGroup(sensorHub, SENSORS_CHANNEL_NAME + SENSOR_ID, JOIN_RETRIES);
+					System.out.println("Connected!");
+					// Method names must be camel case
+					installationHub.invoke("joinGroup", INSTALLATION_ID);
+					sensorHub.invoke("joinGroup", SENSOR_ID);
 
 					break;
 
 				case Disconnected:
+					System.out.println("Disconnected!!");
 					break;
 
 				default:
@@ -64,6 +92,7 @@ public class Program {
 			}
 		});
 
+		// Hub names must be camel case
 		installationHub = con.createHubProxy("installationHub");
 		sensorHub = con.createHubProxy("sensorHub");
 
@@ -96,28 +125,4 @@ public class Program {
 		
 		con.stop();
 	}
-
-	public static void JoinGroup(HubProxy hub, String groupName, int retries) {
-		System.out.print("JoinGroupInstallation: " + groupName + ". Retries: " + retries);
-
-		boolean error = true;
-		while(retries > 0 && error){
-			SignalRFuture<String> invoke = hub.invoke(String.class, "joinGroup", groupName);
-
-			try {
-				invoke.get();
-
-				if(invoke.errorWasTriggered()){
-					error = true;
-				} else{
-					error = false;
-				}
-			} catch (Exception e) {
-				error = true;
-			}
-
-			retries--;
-		}
-	}
-
 }
