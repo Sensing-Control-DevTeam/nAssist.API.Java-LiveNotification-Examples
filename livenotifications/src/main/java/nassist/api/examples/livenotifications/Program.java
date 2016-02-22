@@ -19,9 +19,9 @@ import net.servicestack.client.JsonServiceClient;
 
 public class Program {
 
-	private static HubConnection con = null;
-	private static HubProxy installationHub = null;
-	private static HubProxy sensorHub = null;
+	private static HubConnection con;
+	private static HubProxy installationHub;
+	private static HubProxy sensorHub;
 
 	private static final String NOTIFICATIONS_URL = "http://dev.nassist-test.com";
 

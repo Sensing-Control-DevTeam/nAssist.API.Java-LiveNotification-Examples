@@ -1,4 +1,4 @@
-package nassist.api.examples.livenotifications.notificationinterface;
+package nassist.api.examples.livenotifications.notificationmodel;
 
 import java.util.List;
 
