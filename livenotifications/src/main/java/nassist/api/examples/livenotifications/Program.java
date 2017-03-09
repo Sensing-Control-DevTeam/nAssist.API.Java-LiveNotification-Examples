@@ -9,11 +9,11 @@ import microsoft.aspnet.signalr.client.ConnectionState;
 import microsoft.aspnet.signalr.client.LogLevel;
 import microsoft.aspnet.signalr.client.Logger;
 import microsoft.aspnet.signalr.client.StateChangedCallback;
-import microsoft.aspnet.signalr.client.http.CookieCredentials;
 import microsoft.aspnet.signalr.client.hubs.HubConnection;
 import microsoft.aspnet.signalr.client.hubs.HubProxy;
 import microsoft.aspnet.signalr.client.hubs.SubscriptionHandler3;
 import microsoft.aspnet.signalr.client.hubs.SubscriptionHandler4;
+import microsoft.aspnet.signalr.client.transport.WebsocketTransport;
 import nassist.api.examples.livenotifications.notificationmodel.dto.Authenticate;
 import net.servicestack.client.JsonServiceClient;
 
@@ -23,13 +23,13 @@ public class Program {
 	private static HubProxy installationHub;
 	private static HubProxy sensorHub;
 
-	private static final String NOTIFICATIONS_URL = "http://dev.nassist-test.com";
+	private static final String NOTIFICATIONS_URL = "https://dev.encontrol.io";
 
 	private static final String INSTALLATION_SECURITY_EVENT = "receiveNewInstallationSecurityStatus";
 	private static final String SENSOR_NEW_VALUE_EVENT = "receiveNewSensorData";
 
-	private static final String INSTALLATION_ID = "00000000-0000-0000-0000-b827eb9e544b";
-	private static final String SENSOR_ID = "8a18178c-5b9a-4e1f-9720-b08ab97b1990";
+	private static final String INSTALLATION_ID = "00000000-0000-0000-0000-b827ebe90baa";
+	private static final String SENSOR_ID = "321c86b7-9be4-4660-9303-a5454a0056d0";
 	
 	private static final String UserName = "demo";
 	private static final String Password = "demo";
@@ -62,33 +62,24 @@ public class Program {
 		// Create connection with notification server
 		con = new HubConnection(NOTIFICATIONS_URL, "", true, logger);
 
-		CookieCredentials credentials = new CookieCredentials();
-
 		for(HttpCookie cookie: cmanager.getCookieStore().getCookies()){
-			credentials.addCookie(cookie.getName(), cookie.getValue());
+			con.addHeader("X-" + cookie.getName(), cookie.getValue());
 		}
 		
-		con.setCredentials(credentials);
+		con.connected(new Runnable() {
+			@Override
+			public void run() {
+				System.out.println("Connected!");
+				// Method names must be camel case
+				installationHub.invoke("joinGroup", INSTALLATION_ID);
+				sensorHub.invoke("joinGroup", SENSOR_ID);
+			}
+		});
 		
 		con.stateChanged(new StateChangedCallback() {
 			@Override
 			public void stateChanged(ConnectionState connectionStateOld, ConnectionState connectionStateNew) {
-				switch(connectionStateNew){
-				case Connected:
-					System.out.println("Connected!");
-					// Method names must be camel case
-					installationHub.invoke("joinGroup", INSTALLATION_ID);
-					sensorHub.invoke("joinGroup", SENSOR_ID);
-
-					break;
-
-				case Disconnected:
-					System.out.println("Disconnected!!");
-					break;
-
-				default:
-					break;
-				}
+				System.out.println("State changed from " + connectionStateOld + " to " + connectionStateNew);
 			}
 		});
 
@@ -117,7 +108,8 @@ public class Program {
             }
         }, String.class, String.class, String.class);
 		
-		con.start();
+		// Start the connection using websockets
+		con.start(new WebsocketTransport(logger));
 		
 		sc.nextLine();
 		
